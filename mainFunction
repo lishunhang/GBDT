@@ -1,0 +1,178 @@
+package com.GBDT;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import com.GBDT.CART.TreeNodeBean;
+
+public class mainFunction {
+	
+	
+	
+	/**
+	 * 预测GBDT
+	 * @param Forest
+	 * @param rootPid
+	 * @param Predicting_data
+	 * @return
+	 */
+	
+	public static double PredictingGBDT(List<TreeNodeBean> Forest,String rootPid,Map<String,Object> Predicting_data)
+	{
+		double predicted=0;
+		for(TreeNodeBean tb:Forest)
+		{
+			if(rootPid.equals(tb.getPid()))
+			{
+				TreeNodeBean jg =new TreeNodeBean();
+				jg =com.GBDT.mainFunction.get_tree_vag(Predicting_data,  Forest, tb.getId(),jg);
+				predicted=com.GBDT.CART.DecimalCalculate.add(predicted, jg.getAverage());
+			}
+		}
+		return predicted;
+	}
+	
+	
+	/**
+	 * 测试GBDT
+	 * @param Forest  回归树森林
+	 * @param rootPid 根节点ID 
+	 * @param Testing_data 测试集
+	 * @return
+	 */
+	public static double TestingGBDT(List<TreeNodeBean> Forest,String rootPid,List<Map<String,Object>> Testing_data)
+	{
+		int Hit_count=0;
+		for(Map<String,Object> data :Testing_data)
+		{
+			double y= Integer.parseInt(data.get("lable").toString());
+			double predicted=0;
+			for(TreeNodeBean tb:Forest)
+			{
+				if(rootPid.equals(tb.getPid()))
+				{
+					TreeNodeBean jg =new TreeNodeBean();
+					jg =com.GBDT.mainFunction.get_tree_vag(data,  Forest, tb.getId(),jg);
+					predicted=com.GBDT.CART.DecimalCalculate.add(predicted, jg.getAverage());
+				}
+			}
+			
+			System.out.println("实际值："+y+"\t"+"预测值："+predicted);
+			int predicted_y=new BigDecimal(String.valueOf(predicted)).setScale(0, BigDecimal.ROUND_HALF_UP).intValue();
+			if(y==predicted_y)
+			{
+				Hit_count+=1;
+			}
+			
+		}
+		return com.GBDT.CART.DecimalCalculate.div(Hit_count, Testing_data.size());
+	}
+/**
+ * 训练GBDT
+ * @param Training_data 训练数据集
+ * @param iteration 迭代次数
+ * @param level 回归树层级
+ * @param pid 回归树 父ID
+ * @return 返回 递归好的 森林
+ */
+	public static List<TreeNodeBean> TrainingGBDT(List<Map<String,Object>> Training_data ,int iteration,int level,String rootPid)
+	{
+		List<TreeNodeBean> Forest=new ArrayList<TreeNodeBean>();
+		for(int i=0;i<iteration;i++)
+		{
+			System.out.println("开始第"+(i+1)+"次迭代");
+			Map<String,double[]> Training=List2Map( Training_data);
+			List<TreeNodeBean> tree= com.GBDT.CART.treeMainFunction.count_tree(Training, level, rootPid);
+//			根据树转换结果集
+			for(Map<String,Object> data : Training_data)
+			{ 
+				TreeNodeBean jg =new TreeNodeBean();
+				String id="";
+				for(TreeNodeBean tr:tree)
+				{
+					if(rootPid.equals(tr.getPid()))
+					{
+						id=tr.getId();
+						break;
+					}
+				}
+				jg=com.GBDT.mainFunction.get_tree_vag(data,tree,id,jg);
+				double cancha=com.GBDT.CART.DecimalCalculate.sub(Double.parseDouble(data.get("lable").toString()), jg.getAverage());
+				data.put("lable", cancha);
+			}
+//			将树数据存入森林
+			for(TreeNodeBean tr:tree)
+			{
+				Forest.add(tr);
+			}
+			
+		}
+		return Forest;
+	}
+	public static TreeNodeBean get_tree_vag(Map<String,Object> data,List<TreeNodeBean> tree,String id,TreeNodeBean returndata)
+	{
+		TreeNodeBean nowdata = new TreeNodeBean();
+		double fazhi=0;
+		String name="";
+		boolean isleft=false;
+		for(TreeNodeBean x:tree)
+		{
+			if(id.equals(x.getId()))
+			{
+				nowdata=x;
+				break;
+			}
+		}
+		if(nowdata.isIsleaf())
+		{
+			returndata=nowdata;
+		}
+		else 
+		{
+			fazhi=nowdata.getThreshold();
+			name=nowdata.getName();
+			if(Double.parseDouble(data.get(name).toString())<fazhi)
+			{
+				isleft=true;
+			}
+			String nextId="";
+			for(TreeNodeBean x:tree)
+			{
+				if(id.equals(x.getPid()) && isleft==x.isIslift())
+				{
+					nextId=x.getId();
+					break;
+				}
+			}
+			returndata=get_tree_vag(data,tree,nextId,returndata);
+		}
+		return returndata;
+		
+	}
+	
+	public static Map<String,double[]> List2Map(List<Map<String,Object>> Training_data)
+	{
+		Map<String,double[]> output=new HashMap<String, double[]>();
+		Map<String,Object> fistdata=Training_data.get(0);
+		Iterator it_next = fistdata.entrySet().iterator();
+		while (it_next.hasNext()) 
+		{
+			Map.Entry entry = (Map.Entry) it_next.next();
+			String com=entry.getKey().toString();
+			double[] all= new double[Training_data.size()];
+			int i=0;
+			for(Map<String,Object> data :Training_data)
+			{
+				all[i]=Double.parseDouble(data.get(com).toString());
+				i+=1;
+			}
+			
+			output.put(com, all);
+		}
+		return output;
+	}
+}
